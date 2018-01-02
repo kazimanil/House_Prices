@@ -1,0 +1,82 @@
+---
+title: "House Price EDA"
+author: "Kazım Anıl Eren"
+date: "2 Ocak 2018"
+output: html_document
+---
+
+## Data Input
+I have prepared the data in a separate R session and will make the future possible changes on that R script to prevent this RMd document getting messy.
+
+```{r}
+library(knitr)
+source("HousePrices_DataMungling.R")
+```
+
+## Notes
+
+* It should be carefully noted that all p-values are rounded up to 5 digits.
+
+## EDA via Graphs
+
+### MSSubClass
+
+```{r echo = FALSE}
+ggplot(data = train, aes(x = MSSubClass, y = logSP, col = MSSubClass)) + 
+  geom_boxplot() +
+  labs(x = "Classification", y = "Logarithm of Sale Price")
+```
+
+MSSubClass variable includes at least three dimensions of information. Thus i have divided it into three variables.
+
+* Age
+* PUD
+* Story
+
+#### Age Classification
+
+```{r echo = FALSE}
+ggplot(data = train, aes(x = Age, y = logSP, col = Age)) + 
+  geom_boxplot() +
+  labs(x = "Age Classification", y = "Logarithm of Sale Price")
+```
+
+```{r echo = FALSE}
+train[, New := as.factor(ifelse(Age == "New", 1, 0))]
+ggplot(data = train, aes(x = New, y = logSP, col = New)) + 
+  geom_boxplot() +
+  labs(x = "New Style or Not?", y = "Logarithm of Sale Price")
+```
+
+From the graph above, it is evident that New buildings are more expensive than the others. Still, let's check it with an ANOVA test. The p value is `r round(summary(aov(formula = logSP ~ New, data = train))[[1]][["Pr(>F)"]][1], digits = 5)` which is strong evidence. There are `r train[, .N, .(New)][New == 1]$N` new apartments, while `r train[, .N, .(New)][New == 0]$N` old and `r train[, .N, .(New)][is.na(New)]$N` otherwise.
+
+#### PUD or Not?
+```{r echo = FALSE}
+ggplot(data = train, aes(x = PUD, y = logSP, col = PUD)) + 
+  geom_boxplot() +
+  labs(x = "Planned Unit Development", y = "Logarithm of Sale Price")
+```
+
+There seems there is not much difference between being a PUD or not. Let's confirm this via an ANOVA test. The p value is `r round(summary(aov(formula = logSP ~ PUD, data = train))[[1]][["Pr(>F)"]][1], digits = 5)` which depicts there is no correlation between prices and PUD.
+
+#### Story Classification
+```{r echo = FALSE}
+ggplot(data = train, aes(x = Story, y = logSP, col = Story)) + 
+  geom_boxplot() +
+  labs(x = "Story Classification", y = "Logarithm of Sale Price")
+```
+
+There seems reasonable difference between our story factors and ANOVA confirms this with a p value of `r round(summary(aov(formula = logSP ~ Story, data = train))[[1]][["Pr(>F)"]][1], digits = 5)`. The distribution of story values are as below:
+
+```{r echo = FALSE}
+kable(train[, .(Obs = .N), .(Story)][order(Story)], caption = "Story Distribution")
+```
+
+### MSZoning
+
+Apartments are mostly located in RL (Residential - Low Density) zone as seen table below.
+
+```{r echo = FALSE}
+kable(train[, .(Obs = .N), .(MSZoning)][order(MSZoning)], caption = "MS Zoning Distribution")
+```
+
