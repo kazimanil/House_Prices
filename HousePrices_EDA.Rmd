@@ -29,26 +29,25 @@ ggplot(data = train, aes(x = MSSubClass, y = logSP, col = MSSubClass)) +
 
 MSSubClass variable includes at least three dimensions of information. Thus i have divided it into three variables.
 
-* Age
+* Style
 * PUD
 * Story
 
-#### Age Classification
+#### Style Classification
 
 ```{r echo = FALSE}
-ggplot(data = train, aes(x = Age, y = logSP, col = Age)) + 
+ggplot(data = train, aes(x = Style, y = logSP, col = Style)) + 
   geom_boxplot() +
-  labs(x = "Age Classification", y = "Logarithm of Sale Price")
+  labs(x = "Style Classification", y = "Logarithm of Sale Price")
 ```
 
+From the graph above, it is evident that New buildings are more expensive than the others. Still, let's check it with an ANOVA test. The p value is `r round(summary(aov(formula = logSP ~ New, data = train))[[1]][["Pr(>F)"]][1], digits = 5)` which is strong evidence. There are `r train[, .N, .(New)][New == 1]$N` new apartments, while `r train[, .N, .(New)][New == 0]$N` old and `r train[, .N, .(New)][is.na(New)]$N` otherwise.
+
 ```{r echo = FALSE}
-train[, New := as.factor(ifelse(Age == "New", 1, 0))]
 ggplot(data = train, aes(x = New, y = logSP, col = New)) + 
   geom_boxplot() +
   labs(x = "New Style or Not?", y = "Logarithm of Sale Price")
 ```
-
-From the graph above, it is evident that New buildings are more expensive than the others. Still, let's check it with an ANOVA test. The p value is `r round(summary(aov(formula = logSP ~ New, data = train))[[1]][["Pr(>F)"]][1], digits = 5)` which is strong evidence. There are `r train[, .N, .(New)][New == 1]$N` new apartments, while `r train[, .N, .(New)][New == 0]$N` old and `r train[, .N, .(New)][is.na(New)]$N` otherwise.
 
 #### PUD or Not?
 ```{r echo = FALSE}
@@ -74,9 +73,108 @@ kable(train[, .(Obs = .N), .(Story)][order(Story)], caption = "Story Distributio
 
 ### MSZoning
 
-Apartments are mostly located in RL (Residential - Low Density) zone as seen table below.
+Apartments are mostly located in RL (Residential - Low Density) zone as seen table below and the boxplot shows that MS Zoning is a candidate for regression. ANOVA confirms this output as well: `r round(summary(aov(formula = logSP ~ MSZoning, data = train))[[1]][["Pr(>F)"]][1], digits = 5)`
 
 ```{r echo = FALSE}
 kable(train[, .(Obs = .N), .(MSZoning)][order(MSZoning)], caption = "MS Zoning Distribution")
 ```
 
+```{r echo = FALSE}
+ggplot(data = train, aes(x = MSZoning, y = logSP, col = MSZoning)) + 
+  geom_boxplot() +
+  labs(x = "Story Classification", y = "Logarithm of Sale Price")
+```
+
+### Lot Features
+
+When a histogram of LotArea is examined, it is seen that the distribution is much skewed. Thus the logarithm is taken. There is a significant (p-value of `r round(cor.test(train$logLotArea, train$logSP)[[3]], digits = 5)`) and somewhat strong (correlation co-efficient of `r cor.test(train$logLotArea, train$logSP)[[4]]`) relationship between logarithms of Sale Price and Lot Area as seen in the plot below.
+
+```{r echo = FALSE}
+train[, LotArea := NULL]
+ggplot(data = train, aes(x = logLotArea, y = logSP, col = logSP)) + 
+  geom_jitter() + 
+  labs(x = "Logarithm of Lot Area", y = "Logarithm of Sale Price")
+```
+
+The same goes for Lot Frontage as well. However, there are **259 missing values to be handled**. The graph and correlation details are as below:
+
+```{r echo = FALSE}
+train[, LotFrontage := NULL]
+ggplot(data = train, aes(x = logLotFrontage, y = logSP, col = logSP)) + 
+  geom_jitter() + 
+  labs(x = "Logarithm of Lot Frontage", y = "Logarithm of Sale Price")
+```
+
+```{r echo = FALSE}
+cor.test(train$logLotFrontage, train$logSP)
+```
+
+For *Lot Shape* variable, there are not much observations in IR2 and IR3 Categories. Thereby, I have rearranged the data in the form of: Regular / Irregular. A boxplot will be presented for reference and ANOVA p-value is `r round(summary(aov(formula = logSP ~ LotShape, data = train))[[1]][["Pr(>F)"]][1], digits = 5)`
+
+```{r}
+ggplot(data = train, aes(x = LotShape, y = logSP, col = LotShape)) + 
+  geom_boxplot() + 
+  labs(x = "Lot Shape", y = "Logarithm of Sale Price")
+```
+
+For *Lot Config* variable, it seems that having a *"Cul-De-Sac Housing"* makes the difference if any. Thereby a Cul-De-Sac variable is created. Several AOV tests have suggested this outcome but i will skip those for simplicity.
+
+```{r echo = FALSE}
+ggplot(data = train, aes(x = CulDeSac, y = logSP, col = CulDeSac)) + 
+  geom_boxplot() + 
+  labs(x = "Cul-De-Sac or Not?", y = "Logarithm of Sale Price")
+```
+
+### Access to Streets and Alleys
+
+There are only `r train[!is.na(Alley), .N]` lines with Alley info meanwhile there are only `r train[Street == "Grvl", .N]` observations that have Gravel access to the streets. Thereby, I will skip these variables.
+
+```{r echo = FALSE}
+train[, ':='(Alley  = NULL, 
+             Street = NULL)]
+```
+
+### Land Features
+
+*Land Contour* may keep some information about pricing of the houses as seen in the boxplot below:
+
+```{r echo = FALSE}
+ggplot(data = train, aes(x = LandContour, y = logSP, col = LandContour)) + 
+  geom_boxplot() + 
+  labs(x = "Land Contour", y = "Logarithm of Sale Price")
+```
+
+Factors among *Land Slope* variable does not have significant difference in between as seen in the boxplot below and ANOVA p-value of `r round(summary(aov(formula = logSP ~ LandSlope, data = train))[[1]][["Pr(>F)"]][1], digits = 5)`.
+
+```{r echo = FALSE}
+ggplot(data = train, aes(x = LandSlope, y = logSP, col = LandSlope)) + 
+  geom_boxplot() + 
+  labs(x = "Levels of Land Slope", y = "Logarithm of Sale Price")
+train[, LandSlope := NULL]
+```
+
+### Neighborhood
+
+An obvious connection with house prices is the house's neighborhood indeed. But during regressions, a reference point should be set among factors and determining the reference point is also important for inference. First of all let's see the distribution of the data via a boxplot and then set the reference level for the Neighborhood factor.
+
+```{r}
+ggplot(data = train, aes(x = reorder(Neighborhood, logSP, median), y = logSP, col = Neighborhood)) + 
+  geom_boxplot() + 
+  labs(x = "Neighborhood", y = "Logarithm of Sale Price")
+```
+
+For this factor, **"MeadowV"** neighborhood can be chosen as a reference level since it has the lowest median among all factors.
+
+```{r}
+train[, Neighborhood := relevel(Neighborhood, ref = "MeadowV")]
+```
+
+
+### Basement Features
+
+# Codes
+summary(aov(data = train, formula = logSP ~ LandContour)) 
+summary(lm(data = train, formula = logSP ~ Neighborhood))
+ggplot(data = train, aes(x = Neighborhood, y = logSP, col = Neighborhood)) + 
+  geom_boxplot() + 
+  labs(x = "Neighborhood", y = "Logarithm of Sale Price")

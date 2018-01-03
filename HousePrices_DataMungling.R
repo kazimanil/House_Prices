@@ -4,8 +4,22 @@ train <- fread(input = "train.csv", stringsAsFactors = T)
 test  <- fread(input = "test.csv" , stringsAsFactors = T)
 
 # Train Data Manipulation ----
-# Logarithmic Prices
+# Logarithmic Transformations
+train[, logLotArea := log10(LotArea)]
+train[, logLotFrontage := log10(LotFrontage)]
 train[, logSP := log10(SalePrice)]
+
+# Dwelling Classes
+train[, MSSubClass := as.factor(MSSubClass)]
+train[MSSubClass %in% c("30", "70"), Age := as.factor("Old")] 
+train[MSSubClass %in% c("20", "60", "120", "160"), Age := as.factor("New")]
+train[MSSubClass %in% c("40", "45", "50", "75", "90", "150", "190"), Age := as.factor("All")]
+train[, New := as.factor(ifelse(Age == "New", 1, 0))]
+train[, PUD := as.factor(ifelse(MSSubClass %in% c("120", "150", "160", "180"), 1, 0))]
+train[MSSubClass %in% c("20", "30", "40", "120"),       Story := as.factor("1")]
+train[MSSubClass %in% c("45", "50", "150"),             Story := as.factor("1-1/2")]
+train[MSSubClass %in% c("60", "70", "85", "90", "160"), Story := as.factor("2")]
+train[MSSubClass %in% c("75", "80", "180", "190"),      Story := as.factor("MULTI")]
 
 # Utilities
 train[, Utilities := NULL] # There is no discrepancy among the variable.
@@ -41,18 +55,27 @@ train[, Other    := ifelse(Exterior1st %in% c("Other", "PreCast") | Exterior2nd 
 train[, Exterior1st := as.factor(Exterior1st)]
 train[, Exterior2nd := as.factor(Exterior2nd)]
 
-# Dwelling Classes
-train[, MSSubClass := as.factor(MSSubClass)]
-train[MSSubClass %in% c("30", "70"), Age := as.factor("Old")] 
-train[MSSubClass %in% c("20", "60", "120", "160"), Age := as.factor("New")]
-train[MSSubClass %in% c("40", "45", "50", "75", "90", "150", "190"), Age := as.factor("All")]
-train[, PUD := as.factor(ifelse(MSSubClass %in% c("120", "150", "160", "180"), 1, 0))]
-train[MSSubClass %in% c("20", "30", "40", "120"),       Story := as.factor("1")]
-train[MSSubClass %in% c("45", "50", "150"),             Story := as.factor("1-1/2")]
-train[MSSubClass %in% c("60", "70", "85", "90", "160"), Story := as.factor("2")]
-train[MSSubClass %in% c("75", "80", "180", "190"),      Story := as.factor("MULTI")]
+# Lot Features
+train[, LotShape := ifelse(LotShape == "Reg", "Regular", "Irregular")]
+train[, CulDeSac := as.factor(ifelse(LotConfig == "CulDSac", 1, 0))]
 
 # Test Data Manipulation ----
+# Logarithmic Transformations
+test[, logLotArea := log10(LotArea)]
+test[, logLotFrontage := log10(LotFrontage)]
+
+# Dwelling Classes
+test[, MSSubClass := as.factor(MSSubClass)]
+test[MSSubClass %in% c("30", "70"), Age := as.factor("Old")] 
+test[MSSubClass %in% c("20", "60", "120", "160"), Age := as.factor("New")]
+test[MSSubClass %in% c("40", "45", "50", "75", "90", "150", "190"), Age := as.factor("All")]
+test[, New := as.factor(ifelse(Age == "New", 1, 0))]
+test[, PUD := as.factor(ifelse(MSSubClass %in% c("120", "150", "160", "180"), 1, 0))]
+test[MSSubClass %in% c("20", "30", "40", "120"),       Story := as.factor("1")]
+test[MSSubClass %in% c("45", "50", "150"),             Story := as.factor("1-1/2")]
+test[MSSubClass %in% c("60", "70", "85", "90", "160"), Story := as.factor("2")]
+test[MSSubClass %in% c("75", "80", "180", "190"),      Story := as.factor("MULTI")]
+
 # Utilities
 test[, Utilities := NULL] # There is no discrepancy among the variable.
 # test[Utilities == "AllPub", ':='(Electricity = 1, Gas = 1, Water = 1, Sewer = 1)]
@@ -87,13 +110,6 @@ test[, Other    := ifelse(Exterior1st %in% c("Other", "PreCast") | Exterior2nd %
 test[, Exterior1st := as.factor(Exterior1st)]
 test[, Exterior2nd := as.factor(Exterior2nd)]
 
-# Dwelling Classes
-test[, MSSubClass := as.factor(MSSubClass)]
-test[MSSubClass %in% c("30", "70"), Age := as.factor("Old")] 
-test[MSSubClass %in% c("20", "60", "120", "160"), Age := as.factor("New")]
-test[MSSubClass %in% c("40", "45", "50", "75", "90", "150", "190"), Age := as.factor("All")] 
-test[, PUD     := as.factor(ifelse(MSSubClass %in% c("120", "150", "160", "180"), 1, 0))]
-test[MSSubClass %in% c("20", "30", "40", "120"),       Story := as.factor("1")]
-test[MSSubClass %in% c("45", "50", "150"),             Story := as.factor("1-1/2")]
-test[MSSubClass %in% c("60", "70", "85", "90", "160"), Story := as.factor("2")]
-test[MSSubClass %in% c("75", "80", "180", "190"),      Story := as.factor("MULTI")]
+# Lot Features
+test[, LotShape := ifelse(LotShape == "Reg", "Regular", "Irregular")]
+test[, CulDeSac := as.factor(ifelse(LotConfig == "CulDSac", 1, 0))]
