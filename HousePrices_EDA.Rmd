@@ -157,7 +157,7 @@ train[, LandSlope := NULL]
 
 An obvious connection with house prices is the house's neighborhood indeed. But during regressions, a reference point should be set among factors and determining the reference point is also important for inference. First of all let's see the distribution of the data via a boxplot and then set the reference level for the Neighborhood factor.
 
-```{r}
+```{r echo = FALSE}
 ggplot(data = train, aes(x = reorder(Neighborhood, logSP, median), y = logSP, col = Neighborhood)) + 
   geom_boxplot() + 
   labs(x = "Neighborhood", y = "Logarithm of Sale Price")
@@ -169,12 +169,66 @@ For this factor, **"MeadowV"** neighborhood can be chosen as a reference level s
 train[, Neighborhood := relevel(Neighborhood, ref = "MeadowV")]
 ```
 
+### Bath Features
+
+* BsmtFullBath
+* BsmtHalfBath
+* FullBath
+* HalfBath
+
+Let's check with *Bartlett's test of Sphericity* if we can utilize **PCA** on this dataset.
+
+```{r echo = FALSE warning = FALSE}
+library(psych)
+bath_cor <- cor(train[, .(BsmtFullBath, BsmtHalfBath, FullBath, HalfBath)])
+cortest.bartlett(bath_cor, n = nrow(train))
+rm(bath_cor)
+```
+
+```{r echo = FALSE}
+bath_pca <- prcomp(train[, .(BsmtFullBath, BsmtHalfBath, FullBath, HalfBath)])
+```
+
+A principal component analysis shows that there are no correlation between these four arguments while assigning more weight *FullBaths* over *HalfBaths* and *Above Grade Baths* over *Basement Baths*. Also, since the factors are pure there is no need for a **Varimax rotation**.
+
+```{r}
+train[, Bath := (0.374 * FullBath) + (0.300 * BsmtFullBath) + (0.264 * HalfBath) + (0.0624 * BsmtHalfBath)]
+train[, ':='(FullBath = NULL, 
+             HalfBath = NULL, 
+             BsmtFullBath = NULL, 
+             BsmtHalfBath = NULL)]
+```
+
+### Living Space / Rooms Features
+
+* BedroomAbvGr
+* KitchenAbvGr
+
+### Info about Useable Area
+
+* GrLivArea,
+* BsmtFinSF1,
+* BsmtFinSF2,
+* BsmtUnfSF,
+* ScreenPorch,
+* 3SsnPorch,
+* WoodDeckSF,
+* EnclosedPorch,
+* PoolArea
 
 ### Basement Features
+There is a hefty list on the basement features:
 
-# Codes
+* BsmtCond
+* BsmtExposure
+* BsmtFinType1
+* BsmtFinType2
+* BsmtQual
+
+
+### Codes
 summary(aov(data = train, formula = logSP ~ LandContour)) 
 summary(lm(data = train, formula = logSP ~ Neighborhood))
-ggplot(data = train, aes(x = Neighborhood, y = logSP, col = Neighborhood)) + 
+ggplot(data = train, aes(x = BsmtFullBath, y = logSP, col = BsmtFullBath)) + 
   geom_boxplot() + 
   labs(x = "Neighborhood", y = "Logarithm of Sale Price")
