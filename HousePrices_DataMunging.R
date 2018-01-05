@@ -7,7 +7,8 @@ test  <- fread(input = "test.csv" , stringsAsFactors = T)
 # Logarithmic Transformations
 train[, logLotArea := log10(LotArea)]
 train[, logLotFrontage := log10(LotFrontage)]
-train[, logSP := log10(SalePrice)]
+train[, logSP := log10(SalePrice - MiscVal)]; 
+train[, ':='(MiscVal = NULL)]
 
 # Dwelling Classes
 train[, MSSubClass := as.factor(MSSubClass)]
@@ -15,6 +16,7 @@ train[MSSubClass %in% c("30", "70"), Style := as.factor("Old")]
 train[MSSubClass %in% c("20", "60", "120", "160"), Style := as.factor("New")]
 train[MSSubClass %in% c("40", "45", "50", "75", "90", "150", "190"), Style := as.factor("All")]
 train[, New := as.factor(ifelse(Style == "New", 1, 0))]
+train[is.na(New), New := as.factor(0)]
 train[, PUD := as.factor(ifelse(MSSubClass %in% c("120", "150", "160", "180"), 1, 0))]
 train[MSSubClass %in% c("20", "30", "40", "120"),       Story := as.factor("1")]
 train[MSSubClass %in% c("45", "50", "150"),             Story := as.factor("1-1/2")]
@@ -29,15 +31,14 @@ train[, Utilities := NULL] # There is no discrepancy among the variable.
 # train[Utilities == "ELO", ':='(Electricity = 1, Gas = 0, Water = 0, Sewer = 0)]
 
 # Proximity
-train[, Artery := ifelse(Condition1 == "Artery" | Condition2 == "Artery", 1, 0)]
-train[, Feedr  := ifelse(Condition1 == "Feedr"  | Condition2 == "Feedr", 1, 0)]
-train[, RRNn   := ifelse(Condition1 == "RRNn"   | Condition2 == "RRNn", 1, 0)]
-train[, RRAn   := ifelse(Condition1 == "RRAn"   | Condition2 == "RRAn", 1, 0)]
-train[, PosN   := ifelse(Condition1 == "PosN"   | Condition2 == "PosN", 1, 0)]
-train[, PosA   := ifelse(Condition1 == "PosA"   | Condition2 == "PosA", 1, 0)]
-train[, RRNe   := ifelse(Condition1 == "RRNe"   | Condition2 == "RRNe", 1, 0)]
-train[, RRAe   := ifelse(Condition1 == "RRAe"   | Condition2 == "RRAe", 1, 0)]
-train[, Norm   := ifelse(Artery + Feedr + RRNn + RRAn + PosN + PosA + RRNe + RRAe < 1, 1, 0)]
+train[Condition1 %in% c("Artery", "Feedr") | Condition2 %in% c("Artery", "Feedr"), Proximity := "Main"]
+train[Condition1 %in% c("PosN", "PosA") | Condition2 %in% c("PosN", "PosA"), Proximity := "Positive"]
+train[Condition1 %in% c("RRNn", "RRAn", "RRNe", "RRAe") | Condition2 %in% c("RRNn", "RRAn", "RRNe", "RRAe"), Proximity := "Railroad"]
+train[is.na(Proximity), Proximity := "Norm"]
+train[, Proximity := as.factor(Proximity)]
+train[, Proximity := relevel(Proximity, "Norm")]
+train[, ':='(Condition1 = NULL, Condition2 = NULL)]
+train[, PavedDrive := relevel(PavedDrive, "N")]
 
 # Exterior
 train[, Exterior1st := as.character(Exterior1st)]
@@ -59,6 +60,24 @@ train[, Exterior2nd := as.factor(Exterior2nd)]
 train[, LotShape := ifelse(LotShape == "Reg", "Regular", "Irregular")]
 train[, CulDeSac := as.factor(ifelse(LotConfig == "CulDSac", 1, 0))]
 
+# Age
+train[, ':='(HouseAge = 2011 - YearBuilt,
+             RemodeledAge = 2011 - YearRemodAdd,
+             GarageAge = 2011 - GarageYrBlt)]
+train[, ':='(HouseAge2     = HouseAge^2,
+             RemodeledAge2 = RemodeledAge^2,
+             GarageAge2    = GarageAge^2)]
+train[, ':='(YearBuilt = NULL, YearRemodAdd = NULL, GarageYrBlt = NULL)]
+
+# Masonry Veneer
+train[is.na(MasVnrType), MasVnrType := "None"]
+train[MasVnrType == "None" & MasVnrArea > 0, MasVnrType := "BrkCmn"]
+train[, MasVnrType := relevel(MasVnrType, "None")]
+
+# Area & Rooms
+train[, TotalPorchSF := ScreenPorch + `3SsnPorch` + WoodDeckSF + EnclosedPorch + OpenPorchSF]
+train[, OneKitchen := (KitchenAbvGr == 1)]
+
 # Test Data Manipulation ----
 # Logarithmic Transformations
 test[, logLotArea := log10(LotArea)]
@@ -70,6 +89,7 @@ test[MSSubClass %in% c("30", "70"), Style := as.factor("Old")]
 test[MSSubClass %in% c("20", "60", "120", "160"), Style := as.factor("New")]
 test[MSSubClass %in% c("40", "45", "50", "75", "90", "150", "190"), Style := as.factor("All")]
 test[, New := as.factor(ifelse(Style == "New", 1, 0))]
+test[is.na(New), New := as.factor(0)]
 test[, PUD := as.factor(ifelse(MSSubClass %in% c("120", "150", "160", "180"), 1, 0))]
 test[MSSubClass %in% c("20", "30", "40", "120"),       Story := as.factor("1")]
 test[MSSubClass %in% c("45", "50", "150"),             Story := as.factor("1-1/2")]
@@ -84,15 +104,14 @@ test[, Utilities := NULL] # There is no discrepancy among the variable.
 # test[Utilities == "ELO", ':='(Electricity = 1, Gas = 0, Water = 0, Sewer = 0)]
 
 # Proximity
-test[, Artery := ifelse(Condition1 == "Artery" | Condition2 == "Artery", 1, 0)]
-test[, Feedr  := ifelse(Condition1 == "Feedr"  | Condition2 == "Feedr", 1, 0)]
-test[, RRNn   := ifelse(Condition1 == "RRNn"   | Condition2 == "RRNn", 1, 0)]
-test[, RRAn   := ifelse(Condition1 == "RRAn"   | Condition2 == "RRAn", 1, 0)]
-test[, PosN   := ifelse(Condition1 == "PosN"   | Condition2 == "PosN", 1, 0)]
-test[, PosA   := ifelse(Condition1 == "PosA"   | Condition2 == "PosA", 1, 0)]
-test[, RRNe   := ifelse(Condition1 == "RRNe"   | Condition2 == "RRNe", 1, 0)]
-test[, RRAe   := ifelse(Condition1 == "RRAe"   | Condition2 == "RRAe", 1, 0)]
-test[, Norm   := ifelse(Artery + Feedr + RRNn + RRAn + PosN + PosA + RRNe + RRAe < 1, 1, 0)]
+test[Condition1 %in% c("Artery", "Feedr") | Condition2 %in% c("Artery", "Feedr"), Proximity := "Main"]
+test[Condition1 %in% c("PosN", "PosA") | Condition2 %in% c("PosN", "PosA"), Proximity := "Positive"]
+test[Condition1 %in% c("RRNn", "RRAn", "RRNe", "RRAe") | Condition2 %in% c("RRNn", "RRAn", "RRNe", "RRAe"), Proximity := "Railroad"]
+test[is.na(Proximity), Proximity := "Norm"]
+test[, Proximity := as.factor(Proximity)]
+test[, Proximity := relevel(Proximity, "Norm")]
+test[, ':='(Condition1 = NULL, Condition2 = NULL)]
+test[, PavedDrive := relevel(PavedDrive, "N")]
 
 # Exterior
 test[, Exterior1st := as.character(Exterior1st)]
@@ -113,3 +132,25 @@ test[, Exterior2nd := as.factor(Exterior2nd)]
 # Lot Features
 test[, LotShape := ifelse(LotShape == "Reg", "Regular", "Irregular")]
 test[, CulDeSac := as.factor(ifelse(LotConfig == "CulDSac", 1, 0))]
+
+# Age
+test[, ':='(HouseAge = 2011 - YearBuilt,
+            RemodeledAge = 2011 - YearRemodAdd,
+            GarageAge = 2011 - GarageYrBlt)]
+test[, ':='(HouseAge2     = HouseAge^2,
+            RemodeledAge2 = RemodeledAge^2,
+            GarageAge2    = GarageAge^2)]
+test[, ':='(YearBuilt = NULL, YearRemodAdd = NULL, GarageYrBlt = NULL)]
+
+# Bath
+test[, Bath := (0.374 * FullBath) + (0.300 * BsmtFullBath) + (0.264 * HalfBath) + (0.0624 * BsmtHalfBath)]
+test[, ':='(FullBath = NULL, HalfBath = NULL, BsmtFullBath = NULL, BsmtHalfBath = NULL)]
+
+# Masonry Veneer
+test[is.na(MasVnrType), MasVnrType := "None"]
+test[MasVnrType == "None" & MasVnrArea > 0, MasVnrType := "BrkCmn"]
+test[, MasVnrType := relevel(MasVnrType, "None")]
+
+# Area
+test[, TotalPorchSF := ScreenPorch + `3SsnPorch` + WoodDeckSF + EnclosedPorch + OpenPorchSF]
+test[, OneKitchen := (KitchenAbvGr == 1)]

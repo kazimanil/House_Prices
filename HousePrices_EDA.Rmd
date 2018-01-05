@@ -8,9 +8,13 @@ output: html_document
 ## Data Input
 I have prepared the data in a separate R session and will make the future possible changes on that R script to prevent this RMd document getting messy.
 
-```{r}
-library(knitr)
-source("HousePrices_DataMungling.R")
+```{r warning = FALSE, include = FALSE}
+library(knitr)            # for knitting up.
+library("easyGgplot2")    # for having multiple plots at once
+library(psych)            # for Bartlett's test of sphericity
+library("corrplot")       # for correlation plots
+library("car")            # for Variance Inflation Factor
+source("HousePrices_DataMunging.R")
 ```
 
 ## Notes
@@ -18,7 +22,6 @@ source("HousePrices_DataMungling.R")
 * It should be carefully noted that all p-values are rounded up to 5 digits.
 
 ## EDA via Graphs
-
 ### MSSubClass
 
 ```{r echo = FALSE}
@@ -90,7 +93,7 @@ ggplot(data = train, aes(x = MSZoning, y = logSP, col = MSZoning)) +
 When a histogram of LotArea is examined, it is seen that the distribution is much skewed. Thus the logarithm is taken. There is a significant (p-value of `r round(cor.test(train$logLotArea, train$logSP)[[3]], digits = 5)`) and somewhat strong (correlation co-efficient of `r cor.test(train$logLotArea, train$logSP)[[4]]`) relationship between logarithms of Sale Price and Lot Area as seen in the plot below.
 
 ```{r echo = FALSE}
-train[, LotArea := NULL]
+train[, LotArea := NULL]; test[, LotArea := NULL]
 ggplot(data = train, aes(x = logLotArea, y = logSP, col = logSP)) + 
   geom_jitter() + 
   labs(x = "Logarithm of Lot Area", y = "Logarithm of Sale Price")
@@ -99,7 +102,7 @@ ggplot(data = train, aes(x = logLotArea, y = logSP, col = logSP)) +
 The same goes for Lot Frontage as well. However, there are **259 missing values to be handled**. The graph and correlation details are as below:
 
 ```{r echo = FALSE}
-train[, LotFrontage := NULL]
+train[, LotFrontage := NULL]; test[, LotFrontage := NULL]
 ggplot(data = train, aes(x = logLotFrontage, y = logSP, col = logSP)) + 
   geom_jitter() + 
   labs(x = "Logarithm of Lot Frontage", y = "Logarithm of Sale Price")
@@ -111,7 +114,7 @@ cor.test(train$logLotFrontage, train$logSP)
 
 For *Lot Shape* variable, there are not much observations in IR2 and IR3 Categories. Thereby, I have rearranged the data in the form of: Regular / Irregular. A boxplot will be presented for reference and ANOVA p-value is `r round(summary(aov(formula = logSP ~ LotShape, data = train))[[1]][["Pr(>F)"]][1], digits = 5)`
 
-```{r}
+```{r echo = FALSE}
 ggplot(data = train, aes(x = LotShape, y = logSP, col = LotShape)) + 
   geom_boxplot() + 
   labs(x = "Lot Shape", y = "Logarithm of Sale Price")
@@ -150,7 +153,7 @@ Factors among *Land Slope* variable does not have significant difference in betw
 ggplot(data = train, aes(x = LandSlope, y = logSP, col = LandSlope)) + 
   geom_boxplot() + 
   labs(x = "Levels of Land Slope", y = "Logarithm of Sale Price")
-train[, LandSlope := NULL]
+train[, LandSlope := NULL]; test[, LandSlope := NULL]
 ```
 
 ### Neighborhood
@@ -178,8 +181,7 @@ train[, Neighborhood := relevel(Neighborhood, ref = "MeadowV")]
 
 Let's check with *Bartlett's test of Sphericity* if we can utilize **PCA** on this dataset.
 
-```{r echo = FALSE warning = FALSE}
-library(psych)
+```{r echo = FALSE}
 bath_cor <- cor(train[, .(BsmtFullBath, BsmtHalfBath, FullBath, HalfBath)])
 cortest.bartlett(bath_cor, n = nrow(train))
 rm(bath_cor)
@@ -193,42 +195,309 @@ A principal component analysis shows that there are no correlation between these
 
 ```{r}
 train[, Bath := (0.374 * FullBath) + (0.300 * BsmtFullBath) + (0.264 * HalfBath) + (0.0624 * BsmtHalfBath)]
-train[, ':='(FullBath = NULL, 
-             HalfBath = NULL, 
-             BsmtFullBath = NULL, 
-             BsmtHalfBath = NULL)]
+train[, ':='(FullBath = NULL, HalfBath = NULL, BsmtFullBath = NULL, BsmtHalfBath = NULL)]
+```
+
+### Timing of Sale
+
+A simple AOV depicts that there are no significant difference in *log - sale prices* among sale months.
+
+```{r echo = FALSE}
+summary(aov(logSP ~ as.factor(MoSold), train))
+```
+
+Even for separating the months with Low/High sale frequencies do not change the outcome (Months between March and August, both exclusive are chosen as frequent-sale months):
+
+```{r echo = FALSE}
+summary(aov(logSP ~ (MoSold > 3 & MoSold < 8), train))
+```
+
+Same goes for Sale Year. No correlation with the prices and no significant bust or booms across years.
+
+```{r echo = FALSE}
+summary(aov(logSP ~ as.factor(YrSold), train))
+```
+
+```{r echo = FALSE}
+cor.test(train$logSP, train$YrSold)
+```
+
+On the other there may be correlation among sale-date and log-mean sale prices.
+
+```{r echo = FALSE}
+acf(train[, .(LogMeanSalePrice = log10(mean(SalePrice))), .(Time = as.Date(paste0(YrSold, "-", MoSold, "-01")))][order(Time)][, 2])
+```
+
+It seems that there is a negative relationship with lagged (4m) log-mean prices yet the graph below shows that could be some white noise as well. Thus we will omit time variables in this research.
+
+```{r echo = FALSE}
+monthly_lmsp <- train[, .(LogMeanSalePrice = log10(mean(SalePrice))), .(Time = as.Date(paste0(YrSold, "-", MoSold, "-01")))]
+ggplot(data = monthly_lmsp[order(Time)][1:54],
+       aes(x = Time, y = LogMeanSalePrice)) + geom_line() + geom_smooth() +
+  labs(x = "Time", y = "Logarithm of Monthly Mean Sale Price")
+```
+
+```{r echo = FALSE}
+train[, MoSold := NULL]; test[, MoSold := NULL]
+train[, YrSold := NULL]; test[, YrSold := NULL]
+```
+
+### Age
+
+We had two assumptions while calculating the ages of the buildings:
+
+- All buildings are built at the first day of the year.
+- *Today* is the first day of 2011. (The data ends at July, 2010)
+
+First of all let's plot the variables on jitter & smooth (loess) graphs. 
+
+```{r echo = FALSE}
+p1 <- ggplot(data = train[HouseAge < 90]) + 
+        geom_jitter(aes(x = HouseAge, y = logSP, col = HouseAge)) + 
+          geom_smooth(aes(x = HouseAge, y = logSP), col = "red", method = "loess") +
+            labs(x = "House Age", y = "Logarithm of Sale Price")
+p2 <- ggplot(data = train[RemodeledAge < 60]) + 
+        geom_jitter(aes(x = RemodeledAge, y = logSP, col = RemodeledAge)) + 
+          geom_smooth(aes(x = RemodeledAge, y = logSP), col = "red", method = "loess") +
+            labs(x = "Years Past Remodelling", y = "Logarithm of Sale Price")
+p3 <- ggplot(data = train[GarageAge < 90]) + 
+        geom_jitter(aes(x = GarageAge, y = logSP, col = GarageAge)) + 
+          geom_smooth(aes(x = GarageAge, y = logSP), col = "red", method = "loess") +
+            labs(x = "Garage Age", y = "Logarithm of Sale Price")
+ggplot2.multiplot(p1, p2, p3, cols = 3); rm(p1, p2, p3)
+```
+
+Since a possible 2nd degree effect is possible let's check the CorrPlot of these variables and their 2nd degrees with log-saleprice. 
+
+```{r echo = FALSE}
+corm_ages <- cor(train[, .(logSP, 
+                           HouseAge, HouseAge2 = HouseAge^2, 
+                           RemodeledAge, RemodeledAge2 = RemodeledAge^2, 
+                           GarageAge, GarageAge2 = GarageAge^2)],
+                 use = "complete.obs")
+corrplot(corm_ages, type = "upper", sig.level = 0.05, insig = "blank")
+```
+
+Possible 2nd degree effects are confirmed. On the other hand, those values have high correlations among themselves as well. Thereby, using them together could pose a problem. We may choose the best performing variable amongst by looking up the AIC of simple linear regressions.
+
+```{r echo = FALSE}
+kable(cbind(Variables  = c("HouseAge", "GarageAge", "RemodeledAge"),
+            AIC_Scores = c(round(AIC(lm(logSP ~ HouseAge + HouseAge2, train)), digits = 2),
+                           round(AIC(lm(logSP ~ GarageAge + GarageAge2, train)), digits = 2),
+                           round(AIC(lm(logSP ~ RemodeledAge + RemodeledAge2, train)), digits = 2))))
+test[, ':='(HouseAge = NULL, HouseAge2 = NULL,  GarageAge = NULL, GarageAge2 = NULL)] 
+train[, ':='(HouseAge = NULL, HouseAge2 = NULL,  GarageAge = NULL, GarageAge2 = NULL)] 
+```
+
+Remodeled Age and its 2nd degree variable will be used.
+
+### Masonry Veneer
+
+There is some dirty data (i.e. lines indicating **None** masonry with *some* masonry area) cleaned beforehand.
+
+```{r echo = FALSE}
+ggplot(data = train, aes(x = MasVnrType, y = logSP, col = MasVnrType)) + 
+  geom_boxplot() + 
+  labs(x = "Masonry Veneer Type", y = "Logarithm of Sale Price")
+```
+
+Graph above presents, if there is a Masonry Veneer inside house then the price will go up depending on the type chosen. Graph below presents that if the area with masonry veneer increases than the price may go up as well.
+
+```{r echo = FALSE}
+ggplot(data = train[MasVnrArea > 0]) + 
+        geom_jitter(aes(x = MasVnrArea, y = logSP, col = MasVnrArea)) + 
+          geom_smooth(aes(x = MasVnrArea, y = logSP), col = "red", method = "lm") +
+            labs(x = "Masonry Veneer Area", y = "Logarithm of Sale Price")
+```
+
+### Info about Useable Area
+
+```{r echo = FALSE}
+cor_areas <- cor(train[, .(logSP, `1stFlrSF`, `2ndFlrSF`, LowQualFinSF, GrLivArea,
+                           BsmtFinSF1, BsmtFinSF2, BsmtUnfSF, TotalBsmtSF,
+                           TotalPorchSF, ScreenPorch, `3SsnPorch`, WoodDeckSF, EnclosedPorch, 
+                           PoolArea, GarageArea)])
+corrplot(cor_areas, type = "upper", sig.level = 0.05, insig = "blank")
+rm(cor_areas)
+```
+
+A quick examination about Useable Areas depict that;
+
+- **GrLivArea** can be used as an aggregate to **1stFlrSF**, **2ndFlrSF** and **LowQualFinSF**.
+- **TotalBsmtSF** can be used as an aggregate to **BsmtFinSF1**, **BsmtFinSF2**, **BsmtUnfSF**.
+- **TotalPorchSF** can be used as an aggregate to **ScreenPorch**, **3SsnPorch**, **WoodDeckSF**, **EnclosedPorch**, **OpenPorchSF**. However the last variable has a negative correlation with logSP thus a factor analysis will be conducted.
+- **GarageArea** is a strong estimator and **PoolArea** can also be used.
+
+```{r echo = FALSE}
+pca_porch <- princomp(x = train[, .(ScreenPorch, `3SsnPorch`, WoodDeckSF, EnclosedPorch, OpenPorchSF)])
+summary(pca_porch)
+pca_porch$loadings
+varimax(pca_porch$loadings)
+```
+
+New formula based on factor loadings:
+
+```{r}
+train[, TotalPorchSF := (0.56933 * WoodDeckSF) + (0.16567 * OpenPorchSF) - (0.12876 * EnclosedPorch) + (0.10550 * ScreenPorch)]
+test[,  TotalPorchSF := (0.56933 * WoodDeckSF) + (0.16567 * OpenPorchSF) - (0.12876 * EnclosedPorch) + (0.10550 * ScreenPorch)]
+```
+
+```{r}
+train[, ':='(`1stFlrSF` = NULL, `2ndFlrSF` = NULL, LowQualFinSF = NULL, 
+             BsmtFinSF1 = NULL, BsmtFinSF2 = NULL, BsmtUnfSF = NULL,
+             ScreenPorch = NULL, `3SsnPorch` = NULL, WoodDeckSF = NULL, EnclosedPorch = NULL, OpenPorchSF = NULL)]
+test[, ':='(`1stFlrSF` = NULL, `2ndFlrSF` = NULL, LowQualFinSF = NULL, 
+            BsmtFinSF1 = NULL, BsmtFinSF2 = NULL, BsmtUnfSF = NULL,
+            ScreenPorch = NULL, `3SsnPorch` = NULL, WoodDeckSF = NULL, EnclosedPorch = NULL, OpenPorchSF = NULL)]
 ```
 
 ### Living Space / Rooms Features
 
-* BedroomAbvGr
-* KitchenAbvGr
+```{r echo = FALSE}
+cor_rooms <- cor(train[, .(logSP, BedroomAbvGr, KitchenAbvGr, TotRmsAbvGrd, OneKitchen)])
+corrplot(cor_rooms, type = "upper", sig.level = 0.05, insig = "blank", method = "number")
+rm(cor_rooms)
+train[, ':='(KitchenAbvGr = NULL, TotRmsAbvGrd = NULL)]; test[, ':='(KitchenAbvGr = NULL, TotRmsAbvGrd = NULL)]
+```
 
-### Info about Useable Area
-
-* GrLivArea,
-* BsmtFinSF1,
-* BsmtFinSF2,
-* BsmtUnfSF,
-* ScreenPorch,
-* 3SsnPorch,
-* WoodDeckSF,
-* EnclosedPorch,
-* PoolArea
+Having more than one kitchen decreases the price thereby **OneKitchen** variable is created and TotRmsAbvGrd will not be used since there are two forces in opposite direction within.
 
 ### Basement Features
-There is a hefty list on the basement features:
 
-* BsmtCond
 * BsmtExposure
 * BsmtFinType1
 * BsmtFinType2
+
+### Garage Features
+
+* GarageArea
+* GarageCars
+* GarageCond
+* GarageFinish
+* GarageQual
+* GarageType
+
+### Heating, Fireplace & Utilities
+
+```{r echo = FALSE}
+train[, .N, .(Heating)][order(-N)]
+train[, Heating := as.factor(ifelse(Heating == "GasA", "Standard", "NonStandard"))]; train[is.na(Heating), Heating := "NonStandard"]
+test[,  Heating := as.factor(ifelse(Heating == "GasA", "Standard", "NonStandard"))]; test[is.na(Heating), Heating := "NonStandard"]
+train[, Heating := relevel(Heating, "NonStandard")]; test[, Heating := relevel(Heating, "NonStandard")]
+```
+
+```{r echo = FALSE}
+train[, .N, .(Electrical)][order(-N)]
+train[, Electrical := as.factor(ifelse(Electrical == "SBrkr", "Standard", "NonStandard"))]; train[is.na(Electrical), Electrical := "NonStandard"]
+test[,  Electrical := as.factor(ifelse(Electrical == "SBrkr", "Standard", "NonStandard"))]; test[is.na(Electrical), Electrical := "NonStandard"]
+train[, Electrical := relevel(Electrical, "NonStandard")]; test[, Electrical := relevel(Electrical, "NonStandard")]
+```
+
+Since observations in **Heating** variable is concentrated on "GasA". We will label "GasA" as *Standard* and others as *NonStandard*. Same goes for "SBrkr" observation of **Electrical** variable. Let's depict the differences in prices of *Standard* and *Non-Standard* equipment.
+
+```{r echo = FALSE}
+p1 <- ggplot(data = train) + 
+        geom_boxplot(aes(x = Heating, y = logSP, col = Heating)) + 
+          labs(x = "Heating", y = "Logarithm of Sale Price")
+p2 <- ggplot(data = train) + 
+        geom_boxplot(aes(x = Electrical, y = logSP, col = Electrical)) + 
+          labs(x = "Electrical", y = "Logarithm of Sale Price")
+ggplot2.multiplot(p1, p2); rm(p1,p2)
+```
+
+Next graphic visualizes the availability of fireplaces and central air equipments in the houses and they both seem to affect the prices as well!
+
+```{r echo = FALSE}
+train[, CentralAir := as.factor(ifelse(CentralAir == "Y", "Yes", "No"))]
+test[,  CentralAir := as.factor(ifelse(CentralAir == "Y", "Yes", "No"))]
+train[, CentralAir := relevel(CentralAir, "No")] 
+test[,  CentralAir := relevel(CentralAir, "No")]
+
+train[, Fireplaces := as.factor(ifelse(Fireplaces > 0, "Exist", "None"))]
+test[,  Fireplaces := as.factor(ifelse(Fireplaces > 0, "Exist", "None"))]
+train[, Fireplaces := relevel(Fireplaces, "None")]
+test[,  Fireplaces := relevel(Fireplaces, "None")]
+
+p1 <- ggplot(data = train, aes(x = CentralAir, y = logSP, col = CentralAir)) + 
+        geom_boxplot() +
+          labs(x = "Central Air Equipment", y = "Logarithm of Sale Price")
+p2 <- ggplot(data = train, aes(x = Fireplaces, y = logSP, col = Fireplaces)) + 
+        geom_boxplot() +
+          labs(x = "Any fireplace?", y = "Logarithm of Sale Price")
+ggplot2.multiplot(p1, p2); rm(p1,p2)
+```
+
+### Condition & Quality Features
+
+First of all let's have a look at overall quality and condition distributions and their relationship with **logarith of Sale Price**.
+
+```{r echo = FALSE}
+merge(train[, .(OverallCondition = .N) , .(Rating = OverallCond)],
+      train[, .(OverallQuality = .N) , .(Rating = OverallQual)],
+      all.y = T, by = "Rating")
+```
+
+```{r echo = FALSE}
+p1 <- ggplot(data = train) + 
+        geom_boxplot(aes(x = as.factor(OverallCond), y = logSP, col = OverallCond)) + 
+          labs(x = "Overall Condition", y = "Logarithm of Sale Price")
+p2 <- ggplot(data = train) + 
+        geom_boxplot(aes(x = as.factor(OverallQual), y = logSP, col = OverallQual)) + 
+          labs(x = "Overall Quality", y = "Logarithm of Sale Price")
+ggplot2.multiplot(p1, p2); rm(p1,p2)
+train[, OverallCond := NULL]; test[, OverallCond := NULL]
+```
+
+It seems that *Overall Quality* could be a possible explanatory variable. The correlation with *logSP* is also significant and high (`r cor(train$OverallQual, train$logSP)`).
+
+#### Condition
+* BsmtCond
+* ExterCond
+* GarageCond
+* Functional
+
+#### Quality
 * BsmtQual
+* ExterQual
+* GarageQual
+* KitchenQual
+* HeatingQC
+* FireplaceQu
+* PoolQC
+* Fence
 
+#### Sale Agreement
+* SaleCondition
+* SaleType
 
-### Codes
-summary(aov(data = train, formula = logSP ~ LandContour)) 
-summary(lm(data = train, formula = logSP ~ Neighborhood))
-ggplot(data = train, aes(x = BsmtFullBath, y = logSP, col = BsmtFullBath)) + 
-  geom_boxplot() + 
-  labs(x = "Neighborhood", y = "Logarithm of Sale Price")
+#### Proximity & PavedDrive
+
+Condition1 & Condition2 are grouped in four clusters based on their specifications. Next graph depicts how **PavedDrive** and **Proximity**
+
+* *Main* as being close to the Artery or Feeder streets.
+* *Positive* as being close to the Positive attractions.
+* *Railroad* as being close to Railroad services.
+* *Norm* as no specialty.
+
+```{r echo = FALSE}
+p1 <- ggplot(data = train) + 
+        geom_boxplot(aes(x = Proximity, y = logSP, col = Proximity)) + 
+          labs(x = "Proximity Clusters", y = "Logarithm of Sale Price")
+p2 <- ggplot(data = train) + 
+       geom_boxplot(aes(x = PavedDrive, y = logSP, col = PavedDrive)) + 
+         labs(x = "PavedDrive", y = "Logarithm of Sale Price")
+ggplot2.multiplot(p1, p2); rm(p1,p2)
+```
+
+### Miscellaneous Features
+
+```{r echo = FALSE}
+merge(train[, .(Train = .N), .(MiscFeature)],
+      test[, .(Test = .N), .(MiscFeature)],
+      all.x = T, by = "MiscFeature")
+```
+
+It seems that observations for *Miscellaneous Features* are not enough and AOV does not approve so (p-value is `r round(summary(aov(logSP ~ MiscFeature, train))[[1]][["Pr(>F)"]][1], digits = 5)`) yet their values (*MiscVal*) will be employed during the final calculations. (i.e. logSP is calculating with a deduction of MiscVal of SalePrice)
+
+### The End of EDA
+save(test, train, file = "HousePrices_AfterEDA.RData")
