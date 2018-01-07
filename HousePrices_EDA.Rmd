@@ -1,7 +1,7 @@
 ---
 title: "House Price EDA"
 author: "Kazım Anıl Eren"
-date: "2 Ocak 2018"
+date: "7 Ocak 2018"
 output: html_document
 ---
 
@@ -14,6 +14,7 @@ library("easyGgplot2")    # for having multiple plots at once
 library(psych)            # for Bartlett's test of sphericity
 library("corrplot")       # for correlation plots
 library("car")            # for Variance Inflation Factor
+library("xgboost")        # for predictions after feature engineering
 source("HousePrices_DataMunging.R")
 ```
 
@@ -27,7 +28,7 @@ source("HousePrices_DataMunging.R")
 ```{r echo = FALSE}
 ggplot(data = train, aes(x = MSSubClass, y = logSP, col = MSSubClass)) + 
   geom_boxplot() +
-  labs(x = "Classification", y = "Logarithm of Sale Price")
+  theme_classic() + labs(x = "Classification", y = "Logarithm of Sale Price")
 ```
 
 MSSubClass variable includes at least three dimensions of information. Thus i have divided it into three variables.
@@ -41,7 +42,7 @@ MSSubClass variable includes at least three dimensions of information. Thus i ha
 ```{r echo = FALSE}
 ggplot(data = train, aes(x = Style, y = logSP, col = Style)) + 
   geom_boxplot() +
-  labs(x = "Style Classification", y = "Logarithm of Sale Price")
+  theme_classic() + labs(x = "Style Classification", y = "Logarithm of Sale Price")
 ```
 
 From the graph above, it is evident that New buildings are more expensive than the others. Still, let's check it with an ANOVA test. The p value is `r round(summary(aov(formula = logSP ~ New, data = train))[[1]][["Pr(>F)"]][1], digits = 5)` which is strong evidence. There are `r train[, .N, .(New)][New == 1]$N` new apartments, while `r train[, .N, .(New)][New == 0]$N` old and `r train[, .N, .(New)][is.na(New)]$N` otherwise.
@@ -49,14 +50,15 @@ From the graph above, it is evident that New buildings are more expensive than t
 ```{r echo = FALSE}
 ggplot(data = train, aes(x = New, y = logSP, col = New)) + 
   geom_boxplot() +
-  labs(x = "New Style or Not?", y = "Logarithm of Sale Price")
+  theme_classic() + labs(x = "New Style or Not?", y = "Logarithm of Sale Price")
 ```
 
 #### PUD or Not?
 ```{r echo = FALSE}
 ggplot(data = train, aes(x = PUD, y = logSP, col = PUD)) + 
   geom_boxplot() +
-  labs(x = "Planned Unit Development", y = "Logarithm of Sale Price")
+  theme_classic() + labs(x = "Planned Unit Development", y = "Logarithm of Sale Price")
+train[, PUD := NULL]; test[, PUD := NULL]
 ```
 
 There seems there is not much difference between being a PUD or not. Let's confirm this via an ANOVA test. The p value is `r round(summary(aov(formula = logSP ~ PUD, data = train))[[1]][["Pr(>F)"]][1], digits = 5)` which depicts there is no correlation between prices and PUD.
@@ -65,7 +67,7 @@ There seems there is not much difference between being a PUD or not. Let's confi
 ```{r echo = FALSE}
 ggplot(data = train, aes(x = Story, y = logSP, col = Story)) + 
   geom_boxplot() +
-  labs(x = "Story Classification", y = "Logarithm of Sale Price")
+  theme_classic() + labs(x = "Story Classification", y = "Logarithm of Sale Price")
 ```
 
 There seems reasonable difference between our story factors and ANOVA confirms this with a p value of `r round(summary(aov(formula = logSP ~ Story, data = train))[[1]][["Pr(>F)"]][1], digits = 5)`. The distribution of story values are as below:
@@ -85,7 +87,7 @@ kable(train[, .(Obs = .N), .(MSZoning)][order(MSZoning)], caption = "MS Zoning D
 ```{r echo = FALSE}
 ggplot(data = train, aes(x = MSZoning, y = logSP, col = MSZoning)) + 
   geom_boxplot() +
-  labs(x = "Story Classification", y = "Logarithm of Sale Price")
+  theme_classic() + labs(x = "Story Classification", y = "Logarithm of Sale Price")
 ```
 
 ### Lot Features
@@ -96,7 +98,7 @@ When a histogram of LotArea is examined, it is seen that the distribution is muc
 train[, LotArea := NULL]; test[, LotArea := NULL]
 ggplot(data = train, aes(x = logLotArea, y = logSP, col = logSP)) + 
   geom_jitter() + 
-  labs(x = "Logarithm of Lot Area", y = "Logarithm of Sale Price")
+  theme_classic() + labs(x = "Logarithm of Lot Area", y = "Logarithm of Sale Price")
 ```
 
 The same goes for Lot Frontage as well. However, there are **259 missing values to be handled**. The graph and correlation details are as below:
@@ -105,7 +107,7 @@ The same goes for Lot Frontage as well. However, there are **259 missing values 
 train[, LotFrontage := NULL]; test[, LotFrontage := NULL]
 ggplot(data = train, aes(x = logLotFrontage, y = logSP, col = logSP)) + 
   geom_jitter() + 
-  labs(x = "Logarithm of Lot Frontage", y = "Logarithm of Sale Price")
+  theme_classic() + labs(x = "Logarithm of Lot Frontage", y = "Logarithm of Sale Price")
 ```
 
 ```{r echo = FALSE}
@@ -117,7 +119,7 @@ For *Lot Shape* variable, there are not much observations in IR2 and IR3 Categor
 ```{r echo = FALSE}
 ggplot(data = train, aes(x = LotShape, y = logSP, col = LotShape)) + 
   geom_boxplot() + 
-  labs(x = "Lot Shape", y = "Logarithm of Sale Price")
+  theme_classic() + labs(x = "Lot Shape", y = "Logarithm of Sale Price")
 ```
 
 For *Lot Config* variable, it seems that having a *"Cul-De-Sac Housing"* makes the difference if any. Thereby a Cul-De-Sac variable is created. Several AOV tests have suggested this outcome but i will skip those for simplicity.
@@ -125,7 +127,7 @@ For *Lot Config* variable, it seems that having a *"Cul-De-Sac Housing"* makes t
 ```{r echo = FALSE}
 ggplot(data = train, aes(x = CulDeSac, y = logSP, col = CulDeSac)) + 
   geom_boxplot() + 
-  labs(x = "Cul-De-Sac or Not?", y = "Logarithm of Sale Price")
+  theme_classic() + labs(x = "Cul-De-Sac or Not?", y = "Logarithm of Sale Price")
 ```
 
 ### Access to Streets and Alleys
@@ -133,8 +135,8 @@ ggplot(data = train, aes(x = CulDeSac, y = logSP, col = CulDeSac)) +
 There are only `r train[!is.na(Alley), .N]` lines with Alley info meanwhile there are only `r train[Street == "Grvl", .N]` observations that have Gravel access to the streets. Thereby, I will skip these variables.
 
 ```{r echo = FALSE}
-train[, ':='(Alley  = NULL, 
-             Street = NULL)]
+train[, ':='(Alley  = NULL, Street = NULL)]; 
+test[, ':='(Alley  = NULL, Street = NULL)]
 ```
 
 ### Land Features
@@ -144,7 +146,7 @@ train[, ':='(Alley  = NULL,
 ```{r echo = FALSE}
 ggplot(data = train, aes(x = LandContour, y = logSP, col = LandContour)) + 
   geom_boxplot() + 
-  labs(x = "Land Contour", y = "Logarithm of Sale Price")
+  theme_classic() + labs(x = "Land Contour", y = "Logarithm of Sale Price")
 ```
 
 Factors among *Land Slope* variable does not have significant difference in between as seen in the boxplot below and ANOVA p-value of `r round(summary(aov(formula = logSP ~ LandSlope, data = train))[[1]][["Pr(>F)"]][1], digits = 5)`.
@@ -152,7 +154,7 @@ Factors among *Land Slope* variable does not have significant difference in betw
 ```{r echo = FALSE}
 ggplot(data = train, aes(x = LandSlope, y = logSP, col = LandSlope)) + 
   geom_boxplot() + 
-  labs(x = "Levels of Land Slope", y = "Logarithm of Sale Price")
+  theme_classic() + labs(x = "Levels of Land Slope", y = "Logarithm of Sale Price")
 train[, LandSlope := NULL]; test[, LandSlope := NULL]
 ```
 
@@ -163,13 +165,14 @@ An obvious connection with house prices is the house's neighborhood indeed. But 
 ```{r echo = FALSE}
 ggplot(data = train, aes(x = reorder(Neighborhood, logSP, median), y = logSP, col = Neighborhood)) + 
   geom_boxplot() + 
-  labs(x = "Neighborhood", y = "Logarithm of Sale Price")
+  theme_classic() + labs(x = "Neighborhood", y = "Logarithm of Sale Price")
 ```
 
 For this factor, **"MeadowV"** neighborhood can be chosen as a reference level since it has the lowest median among all factors.
 
 ```{r}
 train[, Neighborhood := relevel(Neighborhood, ref = "MeadowV")]
+test[, Neighborhood := relevel(Neighborhood, ref = "MeadowV")]
 ```
 
 ### Bath Features
@@ -196,6 +199,9 @@ A principal component analysis shows that there are no correlation between these
 ```{r}
 train[, Bath := (0.374 * FullBath) + (0.300 * BsmtFullBath) + (0.264 * HalfBath) + (0.0624 * BsmtHalfBath)]
 train[, ':='(FullBath = NULL, HalfBath = NULL, BsmtFullBath = NULL, BsmtHalfBath = NULL)]
+
+test[, Bath := (0.374 * FullBath) + (0.300 * BsmtFullBath) + (0.264 * HalfBath) + (0.0624 * BsmtHalfBath)]
+test[, ':='(FullBath = NULL, HalfBath = NULL, BsmtFullBath = NULL, BsmtHalfBath = NULL)]
 ```
 
 ### Timing of Sale
@@ -234,7 +240,8 @@ It seems that there is a negative relationship with lagged (4m) log-mean prices 
 monthly_lmsp <- train[, .(LogMeanSalePrice = log10(mean(SalePrice))), .(Time = as.Date(paste0(YrSold, "-", MoSold, "-01")))]
 ggplot(data = monthly_lmsp[order(Time)][1:54],
        aes(x = Time, y = LogMeanSalePrice)) + geom_line() + geom_smooth() +
-  labs(x = "Time", y = "Logarithm of Monthly Mean Sale Price")
+  theme_classic() + labs(x = "Time", y = "Logarithm of Monthly Mean Sale Price")
+rm(monthly_lmsp)
 ```
 
 ```{r echo = FALSE}
@@ -255,15 +262,15 @@ First of all let's plot the variables on jitter & smooth (loess) graphs.
 p1 <- ggplot(data = train[HouseAge < 90]) + 
         geom_jitter(aes(x = HouseAge, y = logSP, col = HouseAge)) + 
           geom_smooth(aes(x = HouseAge, y = logSP), col = "red", method = "loess") +
-            labs(x = "House Age", y = "Logarithm of Sale Price")
+            theme_classic() + labs(x = "House Age", y = "Logarithm of Sale Price")
 p2 <- ggplot(data = train[RemodeledAge < 60]) + 
         geom_jitter(aes(x = RemodeledAge, y = logSP, col = RemodeledAge)) + 
           geom_smooth(aes(x = RemodeledAge, y = logSP), col = "red", method = "loess") +
-            labs(x = "Years Past Remodelling", y = "Logarithm of Sale Price")
+            theme_classic() + labs(x = "Years Past Remodelling", y = "Logarithm of Sale Price")
 p3 <- ggplot(data = train[GarageAge < 90]) + 
         geom_jitter(aes(x = GarageAge, y = logSP, col = GarageAge)) + 
           geom_smooth(aes(x = GarageAge, y = logSP), col = "red", method = "loess") +
-            labs(x = "Garage Age", y = "Logarithm of Sale Price")
+            theme_classic() + labs(x = "Garage Age", y = "Logarithm of Sale Price")
 ggplot2.multiplot(p1, p2, p3, cols = 3); rm(p1, p2, p3)
 ```
 
@@ -298,7 +305,7 @@ There is some dirty data (i.e. lines indicating **None** masonry with *some* mas
 ```{r echo = FALSE}
 ggplot(data = train, aes(x = MasVnrType, y = logSP, col = MasVnrType)) + 
   geom_boxplot() + 
-  labs(x = "Masonry Veneer Type", y = "Logarithm of Sale Price")
+  theme_classic() + labs(x = "Masonry Veneer Type", y = "Logarithm of Sale Price")
 ```
 
 Graph above presents, if there is a Masonry Veneer inside house then the price will go up depending on the type chosen. Graph below presents that if the area with masonry veneer increases than the price may go up as well.
@@ -307,7 +314,7 @@ Graph above presents, if there is a Masonry Veneer inside house then the price w
 ggplot(data = train[MasVnrArea > 0]) + 
         geom_jitter(aes(x = MasVnrArea, y = logSP, col = MasVnrArea)) + 
           geom_smooth(aes(x = MasVnrArea, y = logSP), col = "red", method = "lm") +
-            labs(x = "Masonry Veneer Area", y = "Logarithm of Sale Price")
+            theme_classic() + labs(x = "Masonry Veneer Area", y = "Logarithm of Sale Price")
 ```
 
 ### Info about Useable Area
@@ -342,7 +349,7 @@ train[, TotalPorchSF := (0.56933 * WoodDeckSF) + (0.16567 * OpenPorchSF) - (0.12
 test[,  TotalPorchSF := (0.56933 * WoodDeckSF) + (0.16567 * OpenPorchSF) - (0.12876 * EnclosedPorch) + (0.10550 * ScreenPorch)]
 ```
 
-```{r}
+```{r echo = FALSE, }
 train[, ':='(`1stFlrSF` = NULL, `2ndFlrSF` = NULL, LowQualFinSF = NULL, 
              BsmtFinSF1 = NULL, BsmtFinSF2 = NULL, BsmtUnfSF = NULL,
              ScreenPorch = NULL, `3SsnPorch` = NULL, WoodDeckSF = NULL, EnclosedPorch = NULL, OpenPorchSF = NULL)]
@@ -381,16 +388,22 @@ Having more than one kitchen decreases the price thereby **OneKitchen** variable
 
 ```{r echo = FALSE}
 train[, .N, .(Heating)][order(-N)]
-train[, Heating := as.factor(ifelse(Heating == "GasA", "Standard", "NonStandard"))]; train[is.na(Heating), Heating := "NonStandard"]
-test[,  Heating := as.factor(ifelse(Heating == "GasA", "Standard", "NonStandard"))]; test[is.na(Heating), Heating := "NonStandard"]
-train[, Heating := relevel(Heating, "NonStandard")]; test[, Heating := relevel(Heating, "NonStandard")]
+train[, Heating := as.factor(ifelse(Heating == "GasA", "Standard", "NonStandard"))]
+train[is.na(Heating), Heating := "NonStandard"]
+train[, Heating := relevel(Heating, "NonStandard")]
+test[,  Heating := as.factor(ifelse(Heating == "GasA", "Standard", "NonStandard"))]
+test[is.na(Heating), Heating := "NonStandard"]
+test[, Heating := relevel(Heating, "NonStandard")]
 ```
 
 ```{r echo = FALSE}
 train[, .N, .(Electrical)][order(-N)]
-train[, Electrical := as.factor(ifelse(Electrical == "SBrkr", "Standard", "NonStandard"))]; train[is.na(Electrical), Electrical := "NonStandard"]
-test[,  Electrical := as.factor(ifelse(Electrical == "SBrkr", "Standard", "NonStandard"))]; test[is.na(Electrical), Electrical := "NonStandard"]
-train[, Electrical := relevel(Electrical, "NonStandard")]; test[, Electrical := relevel(Electrical, "NonStandard")]
+train[, Electrical := as.factor(ifelse(Electrical == "SBrkr", "Standard", "NonStandard"))]
+train[is.na(Electrical), Electrical := "NonStandard"]
+train[, Electrical := relevel(Electrical, "NonStandard")] 
+test[,  Electrical := as.factor(ifelse(Electrical == "SBrkr", "Standard", "NonStandard"))]
+test[is.na(Electrical), Electrical := "NonStandard"]
+test[, Electrical := relevel(Electrical, "NonStandard")]
 ```
 
 Since observations in **Heating** variable is concentrated on "GasA". We will label "GasA" as *Standard* and others as *NonStandard*. Same goes for "SBrkr" observation of **Electrical** variable. Let's depict the differences in prices of *Standard* and *Non-Standard* equipment.
@@ -398,10 +411,10 @@ Since observations in **Heating** variable is concentrated on "GasA". We will la
 ```{r echo = FALSE}
 p1 <- ggplot(data = train) + 
         geom_boxplot(aes(x = Heating, y = logSP, col = Heating)) + 
-          labs(x = "Heating", y = "Logarithm of Sale Price")
+          theme_classic() + labs(x = "Heating", y = "Logarithm of Sale Price")
 p2 <- ggplot(data = train) + 
         geom_boxplot(aes(x = Electrical, y = logSP, col = Electrical)) + 
-          labs(x = "Electrical", y = "Logarithm of Sale Price")
+          theme_classic() + labs(x = "Electrical", y = "Logarithm of Sale Price")
 ggplot2.multiplot(p1, p2); rm(p1,p2)
 ```
 
@@ -420,10 +433,10 @@ test[,  Fireplaces := relevel(Fireplaces, "None")]
 
 p1 <- ggplot(data = train, aes(x = CentralAir, y = logSP, col = CentralAir)) + 
         geom_boxplot() +
-          labs(x = "Central Air Equipment", y = "Logarithm of Sale Price")
+          theme_classic() + labs(x = "Central Air Equipment", y = "Logarithm of Sale Price")
 p2 <- ggplot(data = train, aes(x = Fireplaces, y = logSP, col = Fireplaces)) + 
         geom_boxplot() +
-          labs(x = "Any fireplace?", y = "Logarithm of Sale Price")
+          theme_classic() + labs(x = "Any fireplace?", y = "Logarithm of Sale Price")
 ggplot2.multiplot(p1, p2); rm(p1,p2)
 ```
 
@@ -440,10 +453,10 @@ merge(train[, .(OverallCondition = .N) , .(Rating = OverallCond)],
 ```{r echo = FALSE}
 p1 <- ggplot(data = train) + 
         geom_boxplot(aes(x = as.factor(OverallCond), y = logSP, col = OverallCond)) + 
-          labs(x = "Overall Condition", y = "Logarithm of Sale Price")
+          theme_classic() + labs(x = "Overall Condition", y = "Logarithm of Sale Price")
 p2 <- ggplot(data = train) + 
         geom_boxplot(aes(x = as.factor(OverallQual), y = logSP, col = OverallQual)) + 
-          labs(x = "Overall Quality", y = "Logarithm of Sale Price")
+          theme_classic() + labs(x = "Overall Quality", y = "Logarithm of Sale Price")
 ggplot2.multiplot(p1, p2); rm(p1,p2)
 train[, OverallCond := NULL]; test[, OverallCond := NULL]
 ```
@@ -454,7 +467,6 @@ It seems that *Overall Quality* could be a possible explanatory variable. The co
 * BsmtCond
 * ExterCond
 * GarageCond
-* Functional
 
 #### Quality
 * BsmtQual
@@ -464,6 +476,8 @@ It seems that *Overall Quality* could be a possible explanatory variable. The co
 * HeatingQC
 * FireplaceQu
 * PoolQC
+
+
 * Fence
 
 #### Sale Agreement
@@ -482,10 +496,10 @@ Condition1 & Condition2 are grouped in four clusters based on their specificatio
 ```{r echo = FALSE}
 p1 <- ggplot(data = train) + 
         geom_boxplot(aes(x = Proximity, y = logSP, col = Proximity)) + 
-          labs(x = "Proximity Clusters", y = "Logarithm of Sale Price")
+          theme_classic() + labs(x = "Proximity Clusters", y = "Logarithm of Sale Price")
 p2 <- ggplot(data = train) + 
        geom_boxplot(aes(x = PavedDrive, y = logSP, col = PavedDrive)) + 
-         labs(x = "PavedDrive", y = "Logarithm of Sale Price")
+         theme_classic() + labs(x = "PavedDrive", y = "Logarithm of Sale Price")
 ggplot2.multiplot(p1, p2); rm(p1,p2)
 ```
 

@@ -142,10 +142,6 @@ test[, ':='(HouseAge2     = HouseAge^2,
             GarageAge2    = GarageAge^2)]
 test[, ':='(YearBuilt = NULL, YearRemodAdd = NULL, GarageYrBlt = NULL)]
 
-# Bath
-test[, Bath := (0.374 * FullBath) + (0.300 * BsmtFullBath) + (0.264 * HalfBath) + (0.0624 * BsmtHalfBath)]
-test[, ':='(FullBath = NULL, HalfBath = NULL, BsmtFullBath = NULL, BsmtHalfBath = NULL)]
-
 # Masonry Veneer
 test[is.na(MasVnrType), MasVnrType := "None"]
 test[MasVnrType == "None" & MasVnrArea > 0, MasVnrType := "BrkCmn"]
