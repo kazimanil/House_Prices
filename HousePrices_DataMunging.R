@@ -22,6 +22,7 @@ train[MSSubClass %in% c("20", "30", "40", "120"),       Story := as.factor("1")]
 train[MSSubClass %in% c("45", "50", "150"),             Story := as.factor("1-1/2")]
 train[MSSubClass %in% c("60", "70", "85", "90", "160"), Story := as.factor("2")]
 train[MSSubClass %in% c("75", "80", "180", "190"),      Story := as.factor("MULTI")]
+train[, MSSubClass := NULL]
 
 # Utilities
 train[, Utilities := NULL] # There is no discrepancy among the variable.
@@ -57,7 +58,7 @@ train[, Exterior1st := as.factor(Exterior1st)]
 train[, Exterior2nd := as.factor(Exterior2nd)]
 
 # Lot Features
-train[, LotShape := ifelse(LotShape == "Reg", "Regular", "Irregular")]
+train[, LotShape := relevel(as.factor(ifelse(LotShape == "Reg", "Regular", "Irregular")), "Irregular")]
 train[, CulDeSac := as.factor(ifelse(LotConfig == "CulDSac", 1, 0))]
 
 # Age
@@ -95,6 +96,7 @@ test[MSSubClass %in% c("20", "30", "40", "120"),       Story := as.factor("1")]
 test[MSSubClass %in% c("45", "50", "150"),             Story := as.factor("1-1/2")]
 test[MSSubClass %in% c("60", "70", "85", "90", "160"), Story := as.factor("2")]
 test[MSSubClass %in% c("75", "80", "180", "190"),      Story := as.factor("MULTI")]
+test[, MSSubClass := NULL]
 
 # Utilities
 test[, Utilities := NULL] # There is no discrepancy among the variable.
@@ -119,6 +121,7 @@ test[, Exterior2nd := as.character(Exterior2nd)]
 test[Exterior2nd == "Brk Cmn", Exterior2nd := "BrkComm"]
 test[Exterior2nd == "CmentBd", Exterior2nd := "CemntBd"]
 test[Exterior2nd == "Wd Shng", Exterior2nd := "WdShing"]
+test[is.na(Exterior1st) | is.na(Exterior2nd), ':='(Exterior1st = "Other", Exterior2nd = "Other")]
 test[, DoubleExterior := ifelse(Exterior1st != Exterior2nd, 1, 0)]
 test[, Shingles := ifelse(Exterior1st %in% c("AsbShng", "AsphShn", "WdShing") | Exterior2nd %in% c("AsbShng", "AsphShn", "WdShing"), 1, 0)]
 test[, Brick    := ifelse(Exterior1st %in% c("BrkComm", "BrkFace", "CBlock", "Stone") | Exterior2nd %in% c("BrkComm", "BrkFace", "CBlock", "Stone"), 1, 0)]
@@ -130,7 +133,7 @@ test[, Exterior1st := as.factor(Exterior1st)]
 test[, Exterior2nd := as.factor(Exterior2nd)]
 
 # Lot Features
-test[, LotShape := ifelse(LotShape == "Reg", "Regular", "Irregular")]
+test[, LotShape := relevel(as.factor(ifelse(LotShape == "Reg", "Regular", "Irregular")), "Irregular")]
 test[, CulDeSac := as.factor(ifelse(LotConfig == "CulDSac", 1, 0))]
 
 # Age
